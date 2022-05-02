@@ -27,3 +27,9 @@ override.tf.json
 
 # Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
 # example: *tfplan*
+
+# direnv系ファイル
+.env*
+
+# IntelliJ IDEAの設定ファイル群
+.idea/
