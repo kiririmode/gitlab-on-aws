@@ -72,3 +72,14 @@ resource "aws_iam_role_policy_attachment" "default" {
   policy_arn = data.aws_iam_policy.systems_manager.arn
 }
 
+# 接続性の確認
+resource "aws_ec2_network_insights_path" "gitlab" {
+  source           = aws_instance.gitlab.id
+  destination      = aws_internet_gateway.igw.id
+  destination_port = 80
+  protocol         = "tcp"
+
+  tags = {
+    Name = "GitLab to Internet Gateway"
+  }
+}
