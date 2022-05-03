@@ -8,6 +8,8 @@ data "aws_ami" "gitlab" {
 
 # SSM エージェントを含む GitLabCE 用 EC2
 resource "aws_instance" "gitlab" {
+
+  # TODO: 固定化できるようにする
   ami = data.aws_ami.gitlab.id
 
   # ソフトウェアの要件は https://docs.gitlab.com/ee/install/requirements.html を参照
@@ -16,8 +18,26 @@ resource "aws_instance" "gitlab" {
   instance_type        = "t3.medium"
   iam_instance_profile = aws_iam_instance_profile.systems_manager.name
 
+  # プライベートサブネットに配置する
+  availability_zone           = var.availability_zone
+  subnet_id                   = aws_subnet.private.id
+  associate_public_ip_address = false
+
+  vpc_security_group_ids = [
+    aws_security_group.this.id
+  ]
+
   # SSMエージェントを導入
   user_data = file("./install-ssm.sh")
+
+  tags = {
+    Name = "GitLab CE"
+  }
+
+  depends_on = [
+    # NAT Gatewayが先に作成されないと、user_data 実行時に必要なインターネットリーチアビリティが確保されない
+    aws_nat_gateway.this
+  ]
 }
 
 # GitLab用インスタンスに与えるInstance Profile。
