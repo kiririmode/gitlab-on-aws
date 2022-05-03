@@ -1,3 +1,8 @@
+locals {
+  # GitLab を配置する AZ を取得する
+  gitlab_az = toset([for az, flag in var.availability_zones : az if flag])
+}
+
 # GitLabの最新版AMIの取得
 # see: https://ap-northeast-1.console.aws.amazon.com/ec2/v2/home?region=ap-northeast-1#Images:visibility=public-images;ownerAlias=782774275127;search=GitLab%20CE;sort=desc:name
 data "aws_ami" "gitlab" {
@@ -8,6 +13,8 @@ data "aws_ami" "gitlab" {
 
 # SSM エージェントを含む GitLabCE 用 EC2
 resource "aws_instance" "gitlab" {
+  # GitLab が配置される AZ 名が each.key に格納される
+  for_each = local.gitlab_az
 
   # TODO: 固定化できるようにする
   ami = data.aws_ami.gitlab.id
@@ -19,8 +26,8 @@ resource "aws_instance" "gitlab" {
   iam_instance_profile = aws_iam_instance_profile.systems_manager.name
 
   # プライベートサブネットに配置する
-  availability_zone           = var.availability_zone
-  subnet_id                   = aws_subnet.private.id
+  availability_zone           = each.key
+  subnet_id                   = aws_subnet.private[each.key].id
   associate_public_ip_address = false
 
   vpc_security_group_ids = [
@@ -74,7 +81,10 @@ resource "aws_iam_role_policy_attachment" "default" {
 
 # 接続性の確認
 resource "aws_ec2_network_insights_path" "gitlab" {
-  source           = aws_instance.gitlab.id
+  # GitLab が配置される AZ 名が each.key に格納される
+  for_each = local.gitlab_az
+
+  source           = aws_instance.gitlab[each.key].id
   destination      = aws_internet_gateway.igw.id
   destination_port = 80
   protocol         = "tcp"

@@ -10,10 +10,11 @@ resource "aws_vpc" "this" {
 }
 
 resource "aws_subnet" "private" {
-  cidr_block = cidrsubnet(aws_vpc.this.cidr_block, 8, 1)
-  vpc_id     = aws_vpc.this.id
+  for_each = { for idx, az in keys(var.availability_zones): az => idx }
 
-  availability_zone = var.availability_zone
+  cidr_block        = cidrsubnet(aws_vpc.this.cidr_block, 8, each.value)
+  vpc_id            = aws_vpc.this.id
+  availability_zone = each.key
 
   tags = {
     Name = "Private Subnet for GitLab"
@@ -21,10 +22,11 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_subnet" "public" {
-  cidr_block = cidrsubnet(aws_vpc.this.cidr_block, 8, 0)
-  vpc_id     = aws_vpc.this.id
+  for_each = { for idx, az in keys(var.availability_zones): az => idx }
 
-  availability_zone = "ap-northeast-1a"
+  availability_zone = each.key
+  cidr_block        = cidrsubnet(aws_vpc.this.cidr_block, 8, each.value + 128)
+  vpc_id            = aws_vpc.this.id
 
   tags = {
     Name = "Public Subnet for GitLab"
@@ -50,9 +52,12 @@ resource "aws_eip" "nat_gw" {
 }
 
 resource "aws_nat_gateway" "this" {
+  for_each = local.gitlab_az
+
   allocation_id = aws_eip.nat_gw.id
 
-  subnet_id = aws_subnet.public.id
+  # GitLab が配置される AZ のみに NAT Gateway を配置する
+  subnet_id = aws_subnet.public[each.key].id
 
   tags = {
     Name = "Nat Gateway for GitLab"
@@ -62,7 +67,10 @@ resource "aws_nat_gateway" "this" {
 }
 
 # Public Subnetに対するルートテーブル
+# 全ての AZ に対し、Internet Gateway へのルーティングを設定する
 resource "aws_route_table" "public" {
+  for_each = var.availability_zones
+
   vpc_id = aws_vpc.this.id
 
   # サブネット内で閉じる通信以外は、全て Internet Gateway へ向ける
@@ -78,18 +86,24 @@ resource "aws_route_table" "public" {
 
 
 resource "aws_route_table_association" "public" {
-  route_table_id = aws_route_table.public.id
-  subnet_id      = aws_subnet.public.id
+  for_each = var.availability_zones
+
+  route_table_id = aws_route_table.public[each.key].id
+  subnet_id      = aws_subnet.public[each.key].id
 }
 
 # Private Subnetに対するルートテーブル
+# NAT Gateway はコストを鑑み GitLab を作成する AZ にのみ配置する
 resource "aws_route_table" "private" {
+  # GitLab が配置される AZ 名が each.key に格納される
+  for_each = local.gitlab_az
+
   vpc_id = aws_vpc.this.id
 
   # サブネット内で閉じる通信以外は、全て NAT ゲートウェイへ向ける
   route {
     cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this.id
+    nat_gateway_id = aws_nat_gateway.this[each.key].id
   }
 
   tags = {
@@ -98,8 +112,10 @@ resource "aws_route_table" "private" {
 }
 
 resource "aws_route_table_association" "private" {
-  route_table_id = aws_route_table.private.id
-  subnet_id      = aws_subnet.private.id
+  for_each = local.gitlab_az
+
+  route_table_id = aws_route_table.private[each.key].id
+  subnet_id      = aws_subnet.private[each.key].id
 }
 
 resource "aws_security_group" "this" {

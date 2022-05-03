@@ -1,2 +1,5 @@
-cidr_block        = "10.0.0.0/16"
-availability_zone = "ap-northeast-1a"
+cidr_block = "10.0.0.0/16"
+availability_zones = {
+  "ap-northeast-1a" = true,
+  "ap-northeast-1c" = false,
+}

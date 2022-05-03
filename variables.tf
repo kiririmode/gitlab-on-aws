@@ -3,7 +3,7 @@ variable "cidr_block" {
   type        = string
 }
 
-variable "availability_zone" {
-  description = "リソースを配置するAZ"
-  type        = string
+variable "availability_zones" {
+  description = "リソースを配置する Availability Zone (AZ) を示す map。実際に GitLab を配置する AZ の value を true にする"
+  type        = map(bool)
 }
